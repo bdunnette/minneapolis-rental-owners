@@ -1,23 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Building2, List, Map as MapIcon, TrendingUp, Search, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import L from 'leaflet';
-
-// Fix for default marker icon in Leaflet
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41]
-});
-
-L.Marker.prototype.options.icon = DefaultIcon;
 
 const API_URL = 'https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/Active_Rental_Licenses/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson';
 
@@ -45,7 +32,18 @@ function App() {
     const fetchData = async () => {
       try {
         const response = await axios.get(API_URL);
-        setData(response.data.features || []);
+        const features = response.data.features || [];
+
+        // Filter features with valid coordinates (not null, not [0,0])
+        const validFeatures = features.filter(f => {
+          if (!f.geometry || !f.geometry.coordinates) return false;
+          const [lon, lat] = f.geometry.coordinates;
+          // Filter out null or missing values, and (0,0) which is usually a placeholder
+          return lat !== null && lon !== null && lat !== 0 && lon !== 0 &&
+            !isNaN(lat) && !isNaN(lon);
+        });
+
+        setData(validFeatures);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -161,9 +159,17 @@ function App() {
                   />
                   <MapUpdater selected={selectedOwner} features={mapFeatures} />
                   {mapFeatures.map((feature, idx) => (
-                    <Marker
+                    <CircleMarker
                       key={feature.id || idx}
-                      position={[feature.geometry.coordinates[1], feature.geometry.coordinates[0]]}
+                      center={[feature.geometry.coordinates[1], feature.geometry.coordinates[0]]}
+                      radius={selectedOwner ? 6 : 4}
+                      pathOptions={{
+                        fillColor: selectedOwner ? '#818cf8' : '#6366f1',
+                        fillOpacity: selectedOwner ? 0.8 : 0.6,
+                        color: '#ffffff',
+                        weight: 1,
+                        opacity: 0.8
+                      }}
                     >
                       <Popup>
                         <div className="p-1 min-w-[200px]">
@@ -175,7 +181,7 @@ function App() {
                           </div>
                         </div>
                       </Popup>
-                    </Marker>
+                    </CircleMarker>
                   ))}
                 </MapContainer>
               </motion.div>
@@ -226,13 +232,6 @@ function App() {
           </div>
         </div>
       </main>
-
-      <style jsx="true">{`
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
-      `}</style>
     </div>
   );
 }
@@ -352,10 +351,18 @@ const StatBox = ({ label, value }) => (
 function MapUpdater({ selected, features }) {
   const map = useMap();
   useEffect(() => {
+    // Invalidate size on mount/update to ensure map renders correctly in flex containers
+    map.invalidateSize();
+
     if (selected && features.length > 0) {
-      const coords = features.map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
-      const bounds = L.latLngBounds(coords);
-      map.fitBounds(bounds, { padding: [100, 100], maxZoom: 16 });
+      const coords = features
+        .filter(f => f.geometry && f.geometry.coordinates)
+        .map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
+
+      if (coords.length > 0) {
+        const bounds = L.latLngBounds(coords);
+        map.fitBounds(bounds, { padding: [100, 100], maxZoom: 16 });
+      }
     }
   }, [selected, features, map]);
   return null;

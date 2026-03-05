@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      frontend-dependencies:
+        patterns:
+          - "react*"
+          - "framer-motion"
+          - "leaflet"
+          - "lucide-react"
+      dev-tooling:
+        patterns:
+          - "vite*"
+          - "eslint*"
+          - "postcss*"
+          - "tailwindcss"
+          - "autoprefixer"
+          - "globals"
+    labels:
+      - "dependencies"
+  
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-actions:
+        patterns:
+          - "*"

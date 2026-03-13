@@ -198,7 +198,7 @@ function App() {
 
         <div className="flex-1 relative bg-[var(--bg-app)]">
           <AnimatePresence mode="wait">
-            <Routes location={location} key={location.pathname}>
+            <Routes location={location}>
               <Route path="/" element={<Navigate to="/map" replace />} />
               <Route path="/map" element={
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full w-full">

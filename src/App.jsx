@@ -20,7 +20,7 @@ const getPreferredTheme = () => {
     if (saved === 'light' || saved === 'dark') {
       return saved;
     }
-  } catch (e) {
+  } catch {
     // Ignore storage errors and fall through to matchMedia / default
   }
 
@@ -29,7 +29,7 @@ const getPreferredTheme = () => {
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return 'dark';
     }
-  } catch (e) {
+  } catch {
     // Ignore matchMedia errors and fall through to default
   }
 
@@ -80,7 +80,7 @@ function App() {
           window.localStorage && typeof window.localStorage.getItem === 'function'
             ? window.localStorage.getItem('theme')
             : null;
-      } catch (err) {
+      } catch {
         storedTheme = null;
       }
 
@@ -100,7 +100,7 @@ function App() {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('theme', newTheme);
       }
-    } catch (e) {
+    } catch {
       // Ignore storage errors; theme will still update for this session
     }
   };

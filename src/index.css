@@ -37,15 +37,15 @@
 
 [data-theme='light'] {
   color-scheme: light;
-  --bg-app: #ffffff;
+  --bg-app: #f1f5f9;
   --bg-main: #f8fafc;
-  --bg-card: rgba(255, 255, 255, 0.8);
-  --bg-header: rgba(255, 255, 255, 0.7);
-  --bg-sidebar: rgba(241, 245, 249, 0.5);
-  --bg-input: rgba(255, 255, 255, 0.9);
+  --bg-card: rgba(255, 255, 255, 0.95);
+  --bg-header: rgba(255, 255, 255, 0.85);
+  --bg-sidebar: rgba(255, 255, 255, 0.6);
+  --bg-input: #ffffff;
   
   --text-primary: #0f172a;
-  --text-secondary: #334155;
+  --text-secondary: #475569;
   --text-dim: #64748b;
   
   --border: rgba(0, 0, 0, 0.08);

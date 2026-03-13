@@ -29,6 +29,11 @@ const normalizeName = (name) => {
   return n.trim();
 };
 
+const normalizeAddress = (address) => {
+  if (!address) return '';
+  return address.toString().toUpperCase().trim();
+};
+
 function App() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -109,7 +114,7 @@ function App() {
       const found = aggregatedOwners.find(o => o.name.toUpperCase() === ownerParam.toUpperCase());
       if (found) setSelectedOwner(found);
     } else if (addressParam) {
-      const found = data.find(f => f.properties.address.toUpperCase() === addressParam.toUpperCase());
+      const found = data.find(f => normalizeAddress(f.properties.address) === normalizeAddress(addressParam));
       if (found) {
         setSelectedOwner({
           name: found.properties.address,

@@ -5,23 +5,58 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0f172a;
+  color-scheme: light dark;
+  
+  /* Primary Brand Colors (Shared) */
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --accent: #10b981;
+
+  /* Default Dark Theme (can be changed to light as default) */
+  --bg-app: #0b0f1a;
+  --bg-main: #0f172a;
+  --bg-card: rgba(30, 41, 59, 0.7);
+  --bg-header: rgba(30, 41, 59, 0.5);
+  --bg-sidebar: rgba(30, 41, 59, 0.3);
+  --bg-input: rgba(0, 0, 0, 0.4);
+  
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-dim: #94a3b8;
+  
+  --border: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
 
-  /* Design Tokens */
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --bg-dark: #0f172a;
-  --bg-card: rgba(30, 41, 59, 0.7);
-  --border: rgba(255, 255, 255, 0.1);
-  --text-dim: #94a3b8;
-  --accent: #10b981;
+[data-theme='light'] {
+  color-scheme: light;
+  --bg-app: #ffffff;
+  --bg-main: #f8fafc;
+  --bg-card: rgba(255, 255, 255, 0.8);
+  --bg-header: rgba(255, 255, 255, 0.7);
+  --bg-sidebar: rgba(241, 245, 249, 0.5);
+  --bg-input: rgba(255, 255, 255, 0.9);
+  
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-dim: #64748b;
+  
+  --border: rgba(0, 0, 0, 0.08);
+  --glass-border: rgba(0, 0, 0, 0.05);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.1);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+}
+
+body {
+  color: var(--text-primary);
+  background-color: var(--bg-main);
 }
 
 html,
@@ -44,7 +79,7 @@ body,
   background: var(--bg-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 16px;
 }
 
@@ -54,26 +89,28 @@ h3 {
   margin: 0;
   font-weight: 700;
   letter-spacing: -0.025em;
+  color: var(--text-primary);
 }
 
 /* Leaflet Overrides */
 .leaflet-container {
   width: 100%;
   height: 100%;
-  background: #0f172a !important;
+  background: var(--bg-main) !important;
   z-index: 10;
 }
 
 .leaflet-popup-content-wrapper {
-  background: #1e293b !important;
-  color: white !important;
+  background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  backdrop-filter: blur(8px);
   border-radius: 12px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2) !important;
 }
 
 .leaflet-popup-tip {
-  background: #1e293b !important;
+  background: var(--bg-card) !important;
 }
 
 /* Custom Scrollbar */
@@ -86,19 +123,10 @@ h3 {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--scrollbar-thumb);
   border-radius: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* Glassmorphism Classes */
-.glass {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  background: var(--scrollbar-thumb-hover);
 }

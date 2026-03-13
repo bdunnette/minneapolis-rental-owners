@@ -8,6 +8,34 @@ import L from 'leaflet';
 
 const API_URL = 'https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/Active_Rental_Licenses/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson';
 
+const getPreferredTheme = () => {
+  // Default when running in non-browser environments or if everything else fails
+  if (typeof window === 'undefined') {
+    return 'light';
+  }
+
+  // Try to read a persisted theme from localStorage
+  try {
+    const saved = window.localStorage ? window.localStorage.getItem('theme') : null;
+    if (saved === 'light' || saved === 'dark') {
+      return saved;
+    }
+  } catch (e) {
+    // Ignore storage errors and fall through to matchMedia / default
+  }
+
+  // Fall back to system preference via matchMedia, if available
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+  } catch (e) {
+    // Ignore matchMedia errors and fall through to default
+  }
+
+  return 'light';
+};
+
 // Helper to normalize owner names: MY C TRUONG -> MY TRUONG
 const normalizeName = (name) => {
   if (!name) return 'Unknown';
@@ -27,24 +55,36 @@ function App() {
   const [selectedOwner, setSelectedOwner] = useState(null);
   const [view, setView] = useState('map'); // 'map', 'list', or 'recent'
   const [searchQuery, setSearchQuery] = useState('');
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved) return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  const [theme, setTheme] = useState(() => getPreferredTheme());
 
   useEffect(() => {
-    // Sync theme to DOM and localStorage
-    document.documentElement.setAttribute('data-theme', theme);
+    // Sync theme to DOM
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
     // We only save to localStorage if it's a manual choice. 
     // Wait, the toggle sets it. So once set, it persists.
   }, [theme]);
 
   useEffect(() => {
     // Listen for system theme changes if no manual preference is saved
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return;
+    }
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e) => {
-      if (!localStorage.getItem('theme')) {
+      let storedTheme = null;
+      try {
+        storedTheme =
+          window.localStorage && typeof window.localStorage.getItem === 'function'
+            ? window.localStorage.getItem('theme')
+            : null;
+      } catch (err) {
+        storedTheme = null;
+      }
+
+      if (!storedTheme) {
         setTheme(e.matches ? 'dark' : 'light');
       }
     };
@@ -56,7 +96,13 @@ function App() {
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('theme', newTheme);
+      }
+    } catch (e) {
+      // Ignore storage errors; theme will still update for this session
+    }
   };
 
   useEffect(() => {

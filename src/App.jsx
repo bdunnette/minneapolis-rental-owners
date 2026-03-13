@@ -1,12 +1,40 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Building2, List, Map as MapIcon, TrendingUp, Search, Info } from 'lucide-react';
+import { Building2, List, Map as MapIcon, TrendingUp, Search, Info, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import L from 'leaflet';
 
 const API_URL = 'https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/Active_Rental_Licenses/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson';
+
+const getPreferredTheme = () => {
+  // Default when running in non-browser environments or if everything else fails
+  if (typeof window === 'undefined') {
+    return 'light';
+  }
+
+  // Try to read a persisted theme from localStorage
+  try {
+    const saved = window.localStorage ? window.localStorage.getItem('theme') : null;
+    if (saved === 'light' || saved === 'dark') {
+      return saved;
+    }
+  } catch (e) {
+    // Ignore storage errors and fall through to matchMedia / default
+  }
+
+  // Fall back to system preference via matchMedia, if available
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+  } catch (e) {
+    // Ignore matchMedia errors and fall through to default
+  }
+
+  return 'light';
+};
 
 // Helper to normalize owner names: MY C TRUONG -> MY TRUONG
 const normalizeName = (name) => {
@@ -27,6 +55,55 @@ function App() {
   const [selectedOwner, setSelectedOwner] = useState(null);
   const [view, setView] = useState('map'); // 'map', 'list', or 'recent'
   const [searchQuery, setSearchQuery] = useState('');
+  const [theme, setTheme] = useState(() => getPreferredTheme());
+
+  useEffect(() => {
+    // Sync theme to DOM
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+    // We only save to localStorage if it's a manual choice. 
+    // Wait, the toggle sets it. So once set, it persists.
+  }, [theme]);
+
+  useEffect(() => {
+    // Listen for system theme changes if no manual preference is saved
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      let storedTheme = null;
+      try {
+        storedTheme =
+          window.localStorage && typeof window.localStorage.getItem === 'function'
+            ? window.localStorage.getItem('theme')
+            : null;
+      } catch (err) {
+        storedTheme = null;
+      }
+
+      if (!storedTheme) {
+        setTheme(e.matches ? 'dark' : 'light');
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('theme', newTheme);
+      }
+    } catch (e) {
+      // Ignore storage errors; theme will still update for this session
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -99,7 +176,7 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#0f172a] text-white">
+      <div className="flex items-center justify-center h-screen bg-[var(--bg-app)] text-[var(--text-primary)]">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
@@ -109,27 +186,43 @@ function App() {
     );
   }
 
+  const mapUrl = theme === 'dark' 
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+
   return (
-    <div className="flex flex-col h-screen bg-[#0b0f1a] overflow-hidden">
+    <div className="flex flex-col h-screen bg-[var(--bg-app)] overflow-hidden transition-colors duration-300">
       {/* Header */}
-      <header className="h-16 flex items-center justify-between px-6 bg-[#1e293b]/50 backdrop-blur-md border-b border-white/5 z-50">
+      <header className="h-16 flex items-center justify-between px-6 bg-[var(--bg-header)] backdrop-blur-md border-b border-[var(--border)] z-50">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-indigo-500 rounded-lg">
             <Building2 className="text-white w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 leading-tight">
+            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-dim)] leading-tight">
               Minneapolis Rental Empire
             </h1>
             <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold">Data Reveal Dashboard</p>
           </div>
         </div>
 
-        <nav className="flex items-center gap-1 bg-black/30 p-1 rounded-xl border border-white/5">
-          <NavButton active={view === 'map'} onClick={() => setView('map')} icon={<MapIcon size={18} />} label="Map" />
-          <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<List size={18} />} label="Top Owners" />
-          <NavButton active={view === 'recent'} onClick={() => setView('recent')} icon={<TrendingUp size={18} />} label="New Licenses" />
-        </nav>
+        <div className="flex items-center gap-4">
+          <nav className="flex items-center gap-1 bg-[var(--bg-input)] p-1 rounded-xl border border-[var(--border)]">
+            <NavButton active={view === 'map'} onClick={() => setView('map')} icon={<MapIcon size={18} />} label="Map" />
+            <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<List size={18} />} label="Top Owners" />
+            <NavButton active={view === 'recent'} onClick={() => setView('recent')} icon={<TrendingUp size={18} />} label="New Licenses" />
+          </nav>
+          
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)] transition-all hover:scale-105 active:scale-95"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-pressed={theme === 'dark'}
+          >
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden relative">
@@ -143,7 +236,7 @@ function App() {
         />
 
         {/* Content Area */}
-        <div className="flex-1 relative bg-black">
+        <div className="flex-1 relative bg-[var(--bg-app)]">
           <AnimatePresence mode="wait">
             {view === 'map' && (
               <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full w-full">
@@ -154,7 +247,7 @@ function App() {
                   zoomControl={false}
                 >
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    url={mapUrl}
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                   />
                   <MapUpdater selected={selectedOwner} features={mapFeatures} />
@@ -173,11 +266,11 @@ function App() {
                     >
                       <Popup>
                         <div className="p-1 min-w-[200px]">
-                          <h3 className="font-bold text-sm mb-1 text-white">{feature.properties.address}</h3>
+                          <h3 className="font-bold text-sm mb-1">{feature.properties.address}</h3>
                           <div className="text-[11px] space-y-1">
-                            <p className="text-slate-300 flex justify-between"><span>Owner:</span> <span className="text-indigo-400">{feature.properties.ownerName}</span></p>
-                            <p className="text-slate-400 flex justify-between"><span>Licensed Units:</span> <span>{feature.properties.licensedUnits}</span></p>
-                            <p className="text-slate-400 flex justify-between"><span>Issued:</span> <span>{new Date(feature.properties.issueDate).toLocaleDateString()}</span></p>
+                            <p className="text-[var(--text-dim)] flex justify-between"><span>Owner:</span> <span className="text-[var(--primary)]">{feature.properties.ownerName}</span></p>
+                            <p className="text-[var(--text-dim)] flex justify-between opacity-80"><span>Licensed Units:</span> <span>{feature.properties.licensedUnits}</span></p>
+                            <p className="text-[var(--text-dim)] flex justify-between opacity-80"><span>Issued:</span> <span>{new Date(feature.properties.issueDate).toLocaleDateString()}</span></p>
                           </div>
                         </div>
                       </Popup>
@@ -210,13 +303,13 @@ function App() {
                           {i + 1}
                         </div>
                         <div>
-                          <p className="font-bold text-white group-hover:text-emerald-400 transition-colors">{f.properties.address}</p>
-                          <p className="text-xs text-slate-500">Issued: {new Date(f.properties.issueDate).toLocaleDateString()} • {f.properties.ownerName}</p>
+                          <p className="font-bold text-[var(--text-primary)] group-hover:text-emerald-500 transition-colors">{f.properties.address}</p>
+                          <p className="text-xs text-[var(--text-dim)]">Issued: {new Date(f.properties.issueDate).toLocaleDateString()} • {f.properties.ownerName}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-slate-300">{f.properties.licensedUnits} Units</p>
-                        <p className="text-[10px] text-slate-600 uppercase font-bold">{f.properties.neighborhoodDesc}</p>
+                        <p className="text-sm font-bold text-[var(--text-secondary)]">{f.properties.licensedUnits} Units</p>
+                        <p className="text-[10px] text-[var(--text-dim)] uppercase font-bold opacity-60">{f.properties.neighborhoodDesc}</p>
                       </div>
                     </div>
                   ))}
@@ -239,7 +332,7 @@ function App() {
 const NavButton = ({ active, onClick, icon, label }) => (
   <button
     onClick={onClick}
-    className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all font-medium text-sm ${active ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5'
+    className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all font-medium text-sm ${active ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-[var(--text-dim)] hover:text-[var(--text-primary)] hover:bg-white/10'
       }`}
   >
     {icon}
@@ -248,22 +341,22 @@ const NavButton = ({ active, onClick, icon, label }) => (
 );
 
 const Sidebar = ({ searchQuery, setSearchQuery, owners, selectedOwner, setSelectedOwner }) => (
-  <aside className="w-80 flex flex-col bg-[#1e293b]/30 backdrop-blur-sm border-r border-white/5 z-20">
-    <div className="p-4 border-b border-white/5 bg-[#0b0f1a]/50">
+  <aside className="w-80 flex flex-col bg-[var(--bg-sidebar)] backdrop-blur-sm border-r border-[var(--border)] z-20">
+    <div className="p-4 border-b border-[var(--border)] bg-[var(--bg-app)]/50">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-dim)]" />
         <input
           type="text"
           placeholder="Filter by owner name..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-black/40 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-white placeholder:text-slate-600"
+          className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-dim)]/50"
         />
       </div>
     </div>
 
     <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-      <div className="px-3 pt-3 mb-2 text-[10px] uppercase tracking-widest text-indigo-400 font-bold flex justify-between">
+      <div className="px-3 pt-3 mb-2 text-[10px] uppercase tracking-widest text-[var(--primary)] font-bold flex justify-between">
         <span>Aggregated Portfolio List</span>
         <span>Count</span>
       </div>
@@ -281,11 +374,11 @@ const Sidebar = ({ searchQuery, setSearchQuery, owners, selectedOwner, setSelect
         >
           <div className="flex justify-between items-center">
             <div className="flex-1 min-w-0 pr-2">
-              <p className={`text-sm font-bold truncate ${selectedOwner?.name === owner.name ? 'text-white' : 'text-slate-200'}`}>
+              <p className={`text-sm font-bold truncate ${selectedOwner?.name === owner.name ? 'text-white' : 'text-[var(--text-primary)]'}`}>
                 {owner.name}
               </p>
             </div>
-            <span className={`text-xs font-black px-2 py-0.5 rounded-md ${selectedOwner?.name === owner.name ? 'bg-black/20' : 'bg-white/5 text-slate-400'
+            <span className={`text-xs font-black px-2 py-0.5 rounded-md ${selectedOwner?.name === owner.name ? 'bg-black/20 text-white' : 'bg-[var(--bg-input)] text-[var(--text-dim)]'
               }`}>
               {owner.count}
             </span>
@@ -321,16 +414,16 @@ const OwnerCard = ({ owner, rank, totalDataCount, maxCount }) => (
       <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center">
         <Building2 className="text-indigo-400 w-5 h-5" />
       </div>
-      <div className="text-3xl font-black text-white/5 tracking-tighter italic">#{rank}</div>
+      <div className="text-3xl font-black text-[var(--text-primary)] opacity-5 tracking-tighter italic">#{rank}</div>
     </div>
-    <h3 className="text-lg font-bold mb-1 truncate text-white">{owner.name}</h3>
-    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-6">{owner.count} RENTAL LICENSES</p>
+    <h3 className="text-lg font-bold mb-1 truncate text-[var(--text-primary)]">{owner.name}</h3>
+    <p className="text-[var(--text-dim)] text-[10px] font-bold uppercase tracking-wider mb-6">{owner.count} RENTAL LICENSES</p>
     <div className="space-y-2">
       <div className="flex justify-between text-[11px] font-bold">
-        <span className="text-slate-500 uppercase">Portfolio Size</span>
+        <span className="text-[var(--text-dim)] uppercase">Portfolio Size</span>
         <span className="text-indigo-400">{((owner.count / totalDataCount) * 100).toFixed(2)}% of city</span>
       </div>
-      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+      <div className="w-full bg-[var(--bg-input)] h-2 rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${(owner.count / maxCount) * 100}%` }}
@@ -344,7 +437,7 @@ const OwnerCard = ({ owner, rank, totalDataCount, maxCount }) => (
 const StatBox = ({ label, value }) => (
   <div className="glass px-6 py-4 flex flex-col pointer-events-auto shadow-2xl">
     <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-tighter mb-1">{label}</span>
-    <span className="text-2xl font-black text-white">{value}</span>
+    <span className="text-2xl font-black text-[var(--text-primary)]">{value}</span>
   </div>
 );
 

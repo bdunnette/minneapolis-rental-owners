@@ -93,14 +93,52 @@ function App() {
   }, []);
 
   const aggregatedOwners = useMemo(() => {
+    // First compute total city units by unique address to avoid double-counting
+    const addressUnits = {};
+    data.forEach(feature => {
+      const address = normalizeAddress(feature.properties.address || `${feature.id || ''}`);
+      const units = Number(feature.properties.licensedUnits) || 0;
+      if (!address) return;
+      if (!addressUnits[address]) addressUnits[address] = 0;
+      // Only keep the max units for an address in case of duplicates, otherwise sum once
+      // We'll sum once: if multiple records exist for same address, add units only once by tracking seen flag below
+      addressUnits[address] = Math.max(addressUnits[address], units);
+    });
+    const totalCityUnits = Object.values(addressUnits).reduce((s, v) => s + v, 0) || 0;
+
     const counts = {};
     data.forEach(feature => {
       const owner = normalizeName(feature.properties.ownerName || 'Unknown');
-      if (!counts[owner]) counts[owner] = { name: owner, count: 0, properties: [] };
-      counts[owner].count += 1;
+      const units = Number(feature.properties.licensedUnits) || 0;
+      const address = normalizeAddress(feature.properties.address || `${feature.id || ''}`);
+      if (!counts[owner]) counts[owner] = { name: owner, count: 0, properties: [], licensedUnitsTotal: 0, addressSet: new Set() };
+      counts[owner].count += 1; // number of licenses
       counts[owner].properties.push(feature);
+      // Only add units once per unique address to avoid double-counting
+      if (address && !counts[owner].addressSet.has(address)) {
+        counts[owner].addressSet.add(address);
+        counts[owner].licensedUnitsTotal += units;
+      }
     });
-    return Object.values(counts).sort((a, b) => b.count - a.count);
+
+    // compute raw score and normalized score (divide by total city units)
+    const values = Object.values(counts).map(o => {
+      const raw = o.licensedUnitsTotal * o.count;
+      const unitShare = totalCityUnits > 0 ? (o.licensedUnitsTotal / totalCityUnits) : 0; // proportion of city units
+      const normalized = totalCityUnits > 0 ? raw / totalCityUnits : 0;
+      return {
+        name: o.name,
+        count: o.count,
+        properties: o.properties,
+        licensedUnitsTotal: o.licensedUnitsTotal,
+        uniqueProperties: o.addressSet.size,
+        scoreRaw: raw,
+        score: normalized, // normalized raw score (not used for percent shown)
+        unitShare // fraction of city units owned by this owner
+      };
+    });
+    // Sort by total managed units for ranking
+    return values.sort((a, b) => b.licensedUnitsTotal - a.licensedUnitsTotal);
   }, [data]);
 
   // Handle deep linking from URL params
@@ -253,7 +291,7 @@ function App() {
                         owner={owner} 
                         rank={idx + 1} 
                         totalDataCount={data.length} 
-                        maxCount={topOwners[0].count} 
+                        maxRaw={topOwners[0]?.licensedUnitsTotal || 1} 
                         onSelect={() => {
                           updateSelection(owner, 'owner', '/map');
                         }}
@@ -337,7 +375,7 @@ const Sidebar = ({ searchQuery, setSearchQuery, owners, selectedOwner, onSelectO
     <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
       <div className="px-3 pt-3 mb-2 text-[10px] uppercase tracking-widest text-[var(--primary)] font-bold flex justify-between">
         <span>Aggregated Portfolio List</span>
-        <span>Count</span>
+        <span>Score</span>
       </div>
       {owners.map((owner, idx) => (
         <motion.div
@@ -351,15 +389,15 @@ const Sidebar = ({ searchQuery, setSearchQuery, owners, selectedOwner, onSelectO
             : 'hover:bg-white/5 border border-transparent'
             }`}
         >
-          <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center">
             <div className="flex-1 min-w-0 pr-2">
               <p className={`text-sm font-bold truncate ${selectedOwner?.name === owner.name ? 'text-white' : 'text-[var(--text-primary)]'}`}>
                 {owner.name}
               </p>
             </div>
-            <span className={`text-xs font-black px-2 py-0.5 rounded-md ${selectedOwner?.name === owner.name ? 'bg-black/20 text-white' : 'bg-[var(--bg-input)] text-[var(--text-dim)]'
+              <span className={`text-xs font-black px-2 py-0.5 rounded-md ${selectedOwner?.name === owner.name ? 'bg-black/20 text-white' : 'bg-[var(--bg-input)] text-[var(--text-dim)]'
               }`}>
-              {owner.count}
+              {(owner.unitShare * 100).toFixed(2)}%
             </span>
           </div>
           {selectedOwner?.name === owner.name && (
@@ -368,19 +406,29 @@ const Sidebar = ({ searchQuery, setSearchQuery, owners, selectedOwner, onSelectO
               animate={{ height: 'auto', opacity: 1 }}
               className="mt-3 pt-3 border-t border-white/20 space-y-1"
             >
-              {owner.properties.slice(0, 8).map((prop, i) => (
-                <button 
-                  key={i} 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectProperty(prop);
-                  }}
-                  className="w-full text-left text-[10px] text-indigo-100 flex items-center gap-2 font-medium hover:bg-white/10 p-1 rounded-md transition-colors group/prop"
-                >
-                  <div className="w-1 h-1 rounded-full bg-white/50 group-hover/prop:bg-white" />
-                  <span className="truncate">{prop.properties.address}</span>
-                </button>
-              ))}
+              {(() => {
+                const map = {};
+                owner.properties.forEach(p => {
+                  const addrKey = normalizeAddress(p.properties.address || `${p.id || ''}`);
+                  if (!map[addrKey]) map[addrKey] = { representative: p, address: p.properties.address, units: 0 };
+                  map[addrKey].units += Number(p.properties.licensedUnits) || 0;
+                });
+                const entries = Object.values(map).slice(0, 8);
+                return entries.map((entry, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectProperty(entry.representative);
+                    }}
+                    className="w-full text-left text-[10px] text-indigo-100 flex items-center gap-2 font-medium hover:bg-white/10 p-1 rounded-md transition-colors group/prop"
+                  >
+                    <div className="w-1 h-1 rounded-full bg-white/50 group-hover/prop:bg-white" />
+                    <span className="truncate flex-1">{entry.address}</span>
+                    <span className="text-[10px] text-white/70 font-black">{entry.units} units</span>
+                  </button>
+                ));
+              })()}
               {owner.count > 8 && (
                 <div className="text-[10px] text-white/60 font-black pt-1 pl-3">
                   + {owner.count - 8} MORE PROPERTIES
@@ -394,7 +442,7 @@ const Sidebar = ({ searchQuery, setSearchQuery, owners, selectedOwner, onSelectO
   </aside>
 );
 
-const OwnerCard = ({ owner, rank, totalDataCount, maxCount, onSelect }) => (
+const OwnerCard = ({ owner, rank, totalDataCount, maxRaw, onSelect }) => (
   <div 
     onClick={onSelect}
     className="glass p-6 hover:translate-y-[-4px] transition-all duration-300 border-l-4 border-l-indigo-500 cursor-pointer group hover:border-indigo-400 hover:shadow-xl hover:shadow-indigo-500/10"
@@ -406,18 +454,22 @@ const OwnerCard = ({ owner, rank, totalDataCount, maxCount, onSelect }) => (
       <div className="text-3xl font-black text-[var(--text-primary)] opacity-5 tracking-tighter italic">#{rank}</div>
     </div>
     <h3 className="text-lg font-bold mb-1 truncate text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors">{owner.name}</h3>
-    <p className="text-[var(--text-dim)] text-[10px] font-bold uppercase tracking-wider mb-6">{owner.count} RENTAL LICENSES</p>
+    <p className="text-[var(--text-dim)] text-[10px] font-bold uppercase tracking-wider mb-6">{owner.count} RENTAL LICENSES • {owner.licensedUnitsTotal} UNITS</p>
     <div className="space-y-2">
-      <div className="flex justify-between text-[11px] font-bold">
+        <div className="flex justify-between text-[11px] font-bold">
         <span className="text-[var(--text-dim)] uppercase">Portfolio Size</span>
         <span className="text-indigo-400">{((owner.count / totalDataCount) * 100).toFixed(2)}% of city</span>
       </div>
       <div className="w-full bg-[var(--bg-input)] h-2 rounded-full overflow-hidden">
-        <motion.div
+          <motion.div
           initial={{ width: 0 }}
-          animate={{ width: `${(owner.count / maxCount) * 100}%` }}
+          animate={{ width: `${(owner.licensedUnitsTotal / (maxRaw || 1)) * 100}%` }}
           className="bg-indigo-500 h-full rounded-full"
         />
+      </div>
+      <div className="flex justify-between text-[11px] font-bold mt-2">
+        <span className="text-[var(--text-dim)] uppercase">Score</span>
+        <span className="text-indigo-400">{(owner.unitShare * 100).toFixed(2)}%</span>
       </div>
     </div>
   </div>
